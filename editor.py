@@ -2,7 +2,7 @@
 
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QPen, QBrush, QPolygon
+from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QPen, QBrush, QPolygon, QPainterPath
 
 import json
 import math
@@ -16,6 +16,24 @@ class Node():
         self.width = 150
         self.header = 25
         self.height = 25 * (len(out_nodes) + 1)
+        
+        self.moveTo(position)
+        
+        
+        
+    def moveTo(self, position):
+        self.position = position
+        self.head = QRect(position, QSize(self.width, self.header))
+        
+        circleD = self.header-10
+        self.input_socket = QRect(position.x()-circleD/2, position.y()+5, circleD, circleD)
+        
+        self.output_sockets = []
+        
+        for out in self.out_nodes:
+            strY = position.y() + (len(self.output_sockets) + 2) * self.header
+            circle = QRect(position.x() + self.width - circleD/2, strY + 5, circleD, circleD)
+            self.output_sockets.append({"rect":circle, "selected":False, "connected":False})        
     
 
 
@@ -33,15 +51,11 @@ class Widget(QWidget):
         self.h = self.frameGeometry().height()   
         
         self.load_quest()
-        #self.setCursor(Qt.SizeAllCursor)
         
         self.setMouseTracking(True);
         self.Mpos = [0,0]
         self.nodeSelected = None
         self.isDragging = False
-        #self.dPos = [0,0]
-        
-        #self.node = Node([100, 100], "start", "", ["begin"])
         
     def mouseMoveEvent(self, event):
         pos = event.pos()
@@ -49,21 +63,36 @@ class Widget(QWidget):
         
         if not self.isDragging:
             isInHead = False
+            isInOutputSocket = False
             number = 0
             for node in self.nodes:
-                head = node.position
-                header = QRect(head, QSize(node.width, node.header))
-                if header.contains(pos):
+                if node.head.contains(pos):
                     isInHead |= True
                     self.nodeSelected = number
+                
+                socket_number = 0
+                for out in node.output_sockets:
+                    if out["rect"].contains(pos):
+                        isInOutputSocket |= True
+                        self.nodes[number].output_sockets[socket_number]["selected"] = True
+                        self.update()
+                    else:
+                        self.nodes[number].output_sockets[socket_number]["selected"] = False
+                        self.update()
+                    socket_number += 1
                 number += 1
             if isInHead:
                 self.setCursor(Qt.SizeAllCursor)
+            elif isInOutputSocket:
+                self.setCursor(Qt.PointingHandCursor)
             else:
                 self.setCursor(Qt.ArrowCursor)
                 self.nodeSelected = None
+            
+            
+                
         else:
-            self.nodes[self.nodeSelected].position = pos-self.dPos
+            self.nodes[self.nodeSelected].moveTo(pos - self.dPos)
             self.update()
             
     def mousePressEvent(self, event):
@@ -92,8 +121,8 @@ class Widget(QWidget):
                    
             # Header
             painter.setBrush(QBrush(Qt.white, Qt.SolidPattern))
-            header = QRect(head, QSize(node.width, node.header))
-            painter.drawRect(header)
+            #header = QRect(head, QSize(node.width, node.header))
+            painter.drawRect(node.head)
                        
             # Header text
             header_text = QRect(head.x()+15, head.y(), node.width, node.header)
@@ -103,7 +132,7 @@ class Widget(QWidget):
             # Header cirle (Node Input)
             painter.setBrush(QBrush(Qt.cyan, Qt.SolidPattern))
             circleD = node.header-10
-            painter.drawEllipse(QRect(head.x()-circleD/2, head.y()+5, circleD, circleD))
+            painter.drawEllipse(node.input_socket)
             
             # Main part
             painter.setBrush(QBrush(QColor(200, 200, 200, 255), Qt.SolidPattern))
@@ -114,7 +143,7 @@ class Widget(QWidget):
             for nodeOut in node.out_nodes:
                 
                 # Output text
-                strY = head.y() + (node.header*2) + yNodeOut
+                strY = head.y() + (node.header*2) + yNodeOut*25
                 out_rect = QRect(head.x(), strY, node.width - circleD, 25)
                 painter.setFont(QFont("Calibri", 14, QFont.Normal))
                 painter.drawText(out_rect, Qt.AlignRight, nodeOut)
@@ -131,68 +160,15 @@ class Widget(QWidget):
                     end = QPoint(self.nodes[endInd].position)
                     end += QPoint(-circleD/2, circleD/2 + 5)
                     
-                    delta = end - start
+                    painter.save()
+                    painter.setPen(QPen(Qt.black,  2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                    painter.setBrush(QBrush(Qt.NoBrush))  
                     
-                    painter.setPen(QPen(Qt.black,  4, Qt.SolidLine))
-                    
-                    # Some magic to making curve.
-                    # TODO: try to make curves smoother
-                    if delta.x() > 0:
-                        if delta.x() > abs(delta.y()):
-                            if delta.y() > 0:
-                                arc_start = start.x() + (delta.x() - delta.y()*2)//2
-                                first_arc = QRect(arc_start, start.y(), delta.y(), delta.y())
-                                second_arc = QRect(arc_start + delta.y(), start.y(), delta.y(), delta.y())
-                                
-                                painter.drawArc(first_arc, 0*16, 90*16)
-                                painter.drawArc(second_arc, 180*16, 90*16)
-                                
-                                painter.drawLine(start.x(), start.y(), arc_start + delta.y()//2, start.y())
-                                painter.drawLine(arc_start + delta.y()//2*3, end.y(), end.x(), end.y())
-                                
-                            else:
-                                arc_start = start.x() + (delta.x() + delta.y()*2)//2
-                                first_arc = QRect(arc_start, end.y(), -delta.y(), -delta.y())
-                                second_arc = QRect(arc_start - delta.y(), end.y(), -delta.y(), -delta.y())
-                                
-                                painter.drawArc(first_arc, 270*16, 90*16)
-                                painter.drawArc(second_arc, 90*16, 90*16)
-                                
-                                painter.drawLine(start.x(), start.y(), arc_start - delta.y()//2, start.y())
-                                painter.drawLine(arc_start - delta.y()//2*3, end.y(), end.x(), end.y()) 
-                                
-                        else:
-                            if delta.y() > 0:
-                                first_arc = QRect(start.x() - delta.x()//2, start.y(), delta.x(), delta.x())
-                                second_arc = QRect(end.x() - delta.x()//2, end.y() - delta.x(), delta.x(), delta.x())
-                                
-                                painter.drawArc(first_arc, 0*16, 90*16)
-                                painter.drawArc(second_arc, 180*16, 90*16)
-                                
-                                painter.drawLine(start.x() + delta.x()//2, start.y() + delta.x()//2, 
-                                                 start.x() + delta.x()//2, end.y() - delta.x()//2)
-                                
-                            else:
-                                first_arc = QRect(start.x() - delta.x()//2, start.y() - delta.x(), delta.x(), delta.x())
-                                second_arc = QRect(end.x() - delta.x()//2, end.y(), delta.x(), delta.x())
-                                
-                                painter.drawArc(first_arc, 270*16, 90*16)
-                                painter.drawArc(second_arc, 90*16, 90*16)
-                                
-                                painter.drawLine(start.x() + delta.x()//2, start.y() - delta.x()//2, 
-                                                 start.x() + delta.x()//2, end.y() + delta.x()//2)  
-                                
-                    else:
-                        arc_start = start.x() - delta.y()//4
-                        first_arc = QRect(arc_start, start.y(), delta.y()//2, delta.y()//2)
-                        second_arc = QRect(end.x() - delta.y()//4, end.y() - delta.y()//2, delta.y()//2, delta.y()//2)
-                            
-                        painter.drawArc(first_arc, -90*16, 180*16)
-                        painter.drawArc(second_arc, 90*16, 180*16)
-                            
-                        painter.drawLine(start.x(), start.y() + delta.y()//2, end.x(), start.y() + delta.y()//2)
-                                                      
-                    
+                    path = self.curve(start, end)
+                        
+                    painter.drawPath(path) 
+
+                    painter.restore()
                     painter.setPen(QPen(Qt.black,  1, Qt.SolidLine))
                     """
                     # Angle of line
@@ -220,11 +196,83 @@ class Widget(QWidget):
                     circleColor = Qt.cyan
                 
                 # Draw cirlce.
+                socket = node.output_sockets[yNodeOut]
+                circleColor = Qt.green if socket["selected"] else circleColor
                 painter.setBrush(QBrush(circleColor, Qt.SolidPattern))
-                painter.drawEllipse(QRect(head.x() + node.width - circleD/2, strY+5, circleD, circleD))
+                painter.drawEllipse(socket["rect"])
                 
                 
-                yNodeOut += 25
+                yNodeOut += 1
+                
+    def curve(self, start, end): 
+        delta = end - start
+    
+        # Some magic to making curve.
+        if delta.x() > 0:
+            if delta.x() > abs(delta.y()):
+                if delta.y() > 0:
+                    arc_start = start.x() + (delta.x() - delta.y()*2)//2
+                    first_arc = QRectF(arc_start, start.y(), delta.y(), delta.y())
+                    second_arc = QRectF(arc_start + delta.y(), start.y(), delta.y(), delta.y())
+    
+                    path = QPainterPath()
+                    path.moveTo(start)
+                    path.lineTo(arc_start + delta.y()//2, start.y())
+                    path.arcTo(first_arc, 90, -90)
+                    path.arcTo(second_arc, 180, 90)
+                    path.lineTo(end)
+    
+                else:
+                    arc_start = start.x() + (delta.x() + delta.y()*2)//2
+                    first_arc = QRectF(arc_start, end.y(), -delta.y(), -delta.y())
+                    second_arc = QRectF(arc_start - delta.y(), end.y(), -delta.y(), -delta.y())
+    
+                    path = QPainterPath()
+                    path.moveTo(start)
+                    path.lineTo(arc_start - delta.y()//2, start.y())
+                    path.arcTo(first_arc, -90, 90)
+                    path.arcTo(second_arc, 180, -90)
+                    path.lineTo(end)
+    
+            else:
+                if delta.y() > 0:
+                    first_arc = QRectF(start.x() - delta.x()/2, start.y(), delta.x(), delta.x())
+                    second_arc = QRectF(end.x() - delta.x()/2, end.y() - delta.x(), delta.x(), delta.x())
+    
+                    path = QPainterPath()
+                    path.moveTo(start)
+                    path.arcTo(first_arc, 90, -90)
+                    path.lineTo(start.x() + delta.x()/2, end.y() - delta.x()/2)                                
+                    path.arcTo(second_arc, 180, 90)
+                    path.lineTo(end)
+    
+    
+                else:
+                    first_arc = QRectF(start.x() - delta.x()//2, start.y() - delta.x(), delta.x(), delta.x())
+                    second_arc = QRectF(end.x() - delta.x()//2, end.y(), delta.x(), delta.x())
+    
+                    path = QPainterPath()
+                    path.moveTo(start)
+                    path.arcTo(first_arc, -90, 90)
+                    path.lineTo(start.x() + delta.x()/2, end.y() + delta.x()/2)                                
+                    path.arcTo(second_arc, 180, -90)
+                    path.lineTo(end)
+    
+    
+        else:
+            half_dy = delta.y()/2
+            flip = 1 if delta.y() > 0 else -1
+    
+            first_arc = QRectF(start.x() - half_dy/2, start.y(), half_dy, half_dy)
+            second_arc = QRectF(end.x() - half_dy/2, end.y() - half_dy, half_dy, half_dy)
+    
+            path = QPainterPath()
+            path.moveTo(start)
+            path.arcTo(first_arc, 90, -180 * flip)
+            path.lineTo(end.x(), start.y() + delta.y()/2)
+            path.arcTo(second_arc, 90, 180 * flip)  
+            
+        return path
                 
     def load_quest(self):
         f = open('quest.json', 'r', encoding="utf-8")
