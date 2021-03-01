@@ -7,6 +7,8 @@ from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QPen, QBrush, QPolygon, 
 import json
 import math
 
+#TODO: comment all of this before i forget
+
 class Node():
     def __init__ (self, position, tag, in_node, out_nodes):
         self.position = position
@@ -26,14 +28,15 @@ class Node():
         self.head = QRect(position, QSize(self.width, self.header))
         
         circleD = self.header-10
-        self.input_socket = QRect(position.x()-circleD/2, position.y()+5, circleD, circleD)
+        self.input_socket = {"rect" : QRect(position.x()-circleD/2, position.y()+5, circleD, circleD), "selected" : False}
         
         self.output_sockets = []
         
         for out in self.out_nodes:
             strY = position.y() + (len(self.output_sockets) + 2) * self.header
             circle = QRect(position.x() + self.width - circleD/2, strY + 5, circleD, circleD)
-            self.output_sockets.append({"rect":circle, "selected":False, "connected":False})        
+            self.output_sockets.append({"rect" : circle, "pos" : QPoint(position.x() + self.width + circleD/2, strY + self.header//2), "goto" : out, 
+                                        "selected" : False, "connected" : False})        
     
 
 
@@ -53,13 +56,13 @@ class Widget(QWidget):
         self.load_quest()
         
         self.setMouseTracking(True);
-        self.Mpos = [0,0]
         self.nodeSelected = None
         self.isDragging = False
+        self.socketSelected = None
+        self.ghostLine = {"socket": None, "line" : None}
         
     def mouseMoveEvent(self, event):
         pos = event.pos()
-        self.Mpos = [pos.x(), pos.y()]
         
         if not self.isDragging:
             isInHead = False
@@ -74,13 +77,14 @@ class Widget(QWidget):
                 for out in node.output_sockets:
                     if out["rect"].contains(pos):
                         isInOutputSocket |= True
+                        self.socketSelected = [number, socket_number]
                         self.nodes[number].output_sockets[socket_number]["selected"] = True
                         self.update()
                     else:
                         self.nodes[number].output_sockets[socket_number]["selected"] = False
                         self.update()
                     socket_number += 1
-                number += 1
+                number += 1                
             if isInHead:
                 self.setCursor(Qt.SizeAllCursor)
             elif isInOutputSocket:
@@ -88,21 +92,50 @@ class Widget(QWidget):
             else:
                 self.setCursor(Qt.ArrowCursor)
                 self.nodeSelected = None
-            
-            
+                self.socketSelected = None
+                
                 
         else:
-            self.nodes[self.nodeSelected].moveTo(pos - self.dPos)
-            self.update()
+            if self.nodeSelected != None:
+                self.nodes[self.nodeSelected].moveTo(pos - self.dPos)
+                self.update()
+            elif self.socketSelected != None:
+                socket = self.nodes[self.socketSelected[0]].output_sockets[self.socketSelected[1]]
+                self.nodes[self.socketSelected[0]].out_nodes[socket["goto"]] = ""
+                self.ghostLine["line"] = self.curve(socket["pos"], pos)
+                self.update()
+                
+                connected = False
+                for node in self.nodes:
+                    ind = [n.tag for n in self.nodes].index(node.tag)
+                    if node.input_socket["rect"].contains(pos):                        
+                        self.nodes[ind].input_socket["selected"] = True
+                        self.ghostLine["socket"] = node.tag
+                        connected = True
+                    else:
+                        self.nodes[ind].input_socket["selected"] = False
+                    
+                    if not connected:
+                        self.ghostLine["socket"] = None
             
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            if self.nodeSelected != None and not self.isDragging:
-                self.isDragging = True
-                d = event.pos() - self.nodes[self.nodeSelected].position
-                self.dPos = d
+            if not self.isDragging:
+                if self.nodeSelected != None:
+                    self.isDragging = True
+                    d = event.pos() - self.nodes[self.nodeSelected].position
+                    self.dPos = d
+                elif self.socketSelected != None:
+                    self.isDragging = True
             elif self.isDragging:
                 self.isDragging = False
+                if self.socketSelected != None:
+                    socket = self.nodes[self.socketSelected[0]].output_sockets[self.socketSelected[1]]
+                    if self.ghostLine["socket"] != None:
+                        self.nodes[self.socketSelected[0]].out_nodes[socket["goto"]] = self.ghostLine["socket"]
+                    self.ghostLine["line"] = None
+                    self.ghostLine["socket"] = None
+                    self.update()
                 
         
     def keyPressEvent(self, e):
@@ -110,6 +143,10 @@ class Widget(QWidget):
         if e.key() == Qt.Key_E: 
             self.load_quest()
             self.update()
+            
+        if e.key() == Qt.Key_S: 
+            self.save_quest()
+            self.update()        
         
     def paintEvent(self, event):    
         painter = QPainter(self)   
@@ -121,7 +158,6 @@ class Widget(QWidget):
                    
             # Header
             painter.setBrush(QBrush(Qt.white, Qt.SolidPattern))
-            #header = QRect(head, QSize(node.width, node.header))
             painter.drawRect(node.head)
                        
             # Header text
@@ -130,9 +166,10 @@ class Widget(QWidget):
             painter.drawText(header_text, Qt.AlignLeft, node.tag) 
             
             # Header cirle (Node Input)
-            painter.setBrush(QBrush(Qt.cyan, Qt.SolidPattern))
+            color = Qt.green if node.input_socket["selected"] and self.isDragging else Qt.cyan
+            painter.setBrush(QBrush(color, Qt.SolidPattern))
             circleD = node.header-10
-            painter.drawEllipse(node.input_socket)
+            painter.drawEllipse(node.input_socket["rect"])
             
             # Main part
             painter.setBrush(QBrush(QColor(200, 200, 200, 255), Qt.SolidPattern))
@@ -167,31 +204,12 @@ class Widget(QWidget):
                     path = self.curve(start, end)
                         
                     painter.drawPath(path) 
+                    
+                    if self.ghostLine["line"] != None:
+                        painter.drawPath(self.ghostLine["line"])
 
                     painter.restore()
                     painter.setPen(QPen(Qt.black,  1, Qt.SolidLine))
-                    """
-                    # Angle of line
-                    angle = math.degrees(math.atan((yN-y0)/(xN-x0)))
-                    
-                    # Draw line.
-                    painter.drawLine(start, end)
-                    
-                    # Arrow polygon
-                    arrow = QPolygon(3)
-                    arrow.putPoints(0, 0, 0)
-                    arrow.putPoints(1, -10, 5)
-                    arrow.putPoints(2, -10, -5)
-                    
-                    # Draw arrow. 
-                    painter.save()       
-                    painter.setBrush(QBrush(Qt.black, Qt.SolidPattern))
-                    painter.translate(xN, yN)
-                    painter.rotate(angle)               
-                    painter.drawPolygon(arrow)
-                    painter.setBrush(Qt.NoBrush)                
-                    painter.restore()
-                    """
                     
                     circleColor = Qt.cyan
                 
@@ -286,6 +304,17 @@ class Widget(QWidget):
             if node != "unidentified" and node != "help":
                 position = self.quest[node]["position"]
                 self.nodes.append(Node(QPoint(position[0], position[1]), node, "", self.quest[node]["goto"]))
+                
+    def save_quest(self):
+        f = open('quest_new.json', 'w', encoding="utf-8")
+        quest = {}
+        for node in self.nodes:
+            quest[node.tag] = {"position": [node.position.x(), node.position.y()], "bot_answer" : self.quest[node.tag]["bot_answer"],
+                           "goto": {}}
+            for i in node.out_nodes:
+                quest[node.tag]["goto"][i] = node.out_nodes[i]
+        print(quest)
+        f.write(str(quest).replace("'",'"'))
             
     
 if __name__ == '__main__':
