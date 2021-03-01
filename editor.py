@@ -180,7 +180,18 @@ class Widget(QWidget):
                                 painter.drawArc(second_arc, 90*16, 90*16)
                                 
                                 painter.drawLine(start.x() + delta.x()//2, start.y() - delta.x()//2, 
-                                                 start.x() + delta.x()//2, end.y() + delta.x()//2)                            
+                                                 start.x() + delta.x()//2, end.y() + delta.x()//2)  
+                                
+                    else:
+                        arc_start = start.x() - delta.y()//4
+                        first_arc = QRect(arc_start, start.y(), delta.y()//2, delta.y()//2)
+                        second_arc = QRect(end.x() - delta.y()//4, end.y() - delta.y()//2, delta.y()//2, delta.y()//2)
+                            
+                        painter.drawArc(first_arc, -90*16, 180*16)
+                        painter.drawArc(second_arc, 90*16, 180*16)
+                            
+                        painter.drawLine(start.x(), start.y() + delta.y()//2, end.x(), start.y() + delta.y()//2)
+                                                      
                     
                     painter.setPen(QPen(Qt.black,  1, Qt.SolidLine))
                     """
