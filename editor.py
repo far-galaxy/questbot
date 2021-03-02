@@ -6,14 +6,15 @@ from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QPen, QBrush, QPolygon, 
 
 import json
 import math
+import os
 
 #TODO: comment all of this before i forget
 
 class Node():
-    def __init__ (self, position, tag, in_node, out_nodes):
+    def __init__ (self, position, tag, answer, out_nodes):
         self.position = position
         self.tag = tag
-        self.in_node = in_node
+        self.answer = answer
         self.out_nodes = out_nodes
         self.width = 150
         self.header = 25
@@ -51,9 +52,32 @@ class Widget(QWidget):
         #self.setFont(QFont("Calibri", 16, QFont.Normal))
         
         self.w = self.frameGeometry().width()
-        self.h = self.frameGeometry().height()   
+        self.h = self.frameGeometry().height() 
         
-        self.load_quest()
+        menubar = QMenuBar() 
+        
+        #  File menu
+        file_menu = menubar.addMenu('&File') 
+        
+        open_file_menu = QAction('Open', self)
+        open_file_menu.setShortcut('Ctrl+O')
+        open_file_menu.triggered.connect(self.open_file)
+        
+        save_file_menu = QAction('Save', self)
+        save_file_menu.setShortcut('Ctrl+S')
+        save_file_menu.triggered.connect(self.save_file)                       
+        
+        file_menu.addAction(open_file_menu)
+        file_menu.addAction(save_file_menu) 
+        
+        new_node_menu = menubar.addAction('&New Node')
+        new_node_menu.triggered.connect(self.new_node)         
+        
+        grid = QGridLayout()
+        grid.setMenuBar(menubar)
+        self.setLayout(grid)
+        
+        self.load_quest('quest.json')
         
         self.setMouseTracking(True);
         self.nodeSelected = None
@@ -141,7 +165,7 @@ class Widget(QWidget):
     def keyPressEvent(self, e):
     
         if e.key() == Qt.Key_E: 
-            self.load_quest()
+            self.load_quest('quest.json')
             self.update()
             
         if e.key() == Qt.Key_S: 
@@ -292,29 +316,44 @@ class Widget(QWidget):
             
         return path
                 
-    def load_quest(self):
-        f = open('quest.json', 'r', encoding="utf-8")
-        self.quest = json.loads(f.read())
-        f.close()
+    
+    def new_node(self):
+        self.nodes.append(Node(QPoint(100, 100), "node", "", {}))
+        self.update()
+    
+    def open_file(self):
+        file = QFileDialog.getOpenFileName(self, 'Open Quest File', os.path.abspath(""), "Quest (*.json)")
+        self.load_quest(file[0])    
         
-        self.nodes = []
-        
-        # Make nodes objects
-        for node in self.quest:
-            if node != "unidentified" and node != "help":
-                position = self.quest[node]["position"]
-                self.nodes.append(Node(QPoint(position[0], position[1]), node, "", self.quest[node]["goto"]))
+    def save_file(self):
+        file = QFileDialog.getSaveFileName(self, 'Save Quest File', os.path.abspath("quest.json"), "Quest (*.json)")
+        self.save_quest(file[0])         
+    
+    def load_quest(self, file):
+        if file != "":
+            f = open(file, 'r', encoding="utf-8")
+            self.quest = json.loads(f.read())
+            f.close()
+            
+            self.nodes = []
+            
+            # Make nodes objects
+            for node in self.quest:
+                if node != "unidentified" and node != "help":
+                    position = self.quest[node]["position"]
+                    self.nodes.append(Node(QPoint(position[0], position[1]), node, self.quest[node]["bot_answer"], self.quest[node]["goto"]))
                 
-    def save_quest(self):
-        f = open('quest_new.json', 'w', encoding="utf-8")
-        quest = {}
-        for node in self.nodes:
-            quest[node.tag] = {"position": [node.position.x(), node.position.y()], "bot_answer" : self.quest[node.tag]["bot_answer"],
-                           "goto": {}}
-            for i in node.out_nodes:
-                quest[node.tag]["goto"][i] = node.out_nodes[i]
-        print(quest)
-        f.write(str(quest).replace("'",'"'))
+    def save_quest(self, file):
+        if file != "":
+            f = open(file, 'w', encoding="utf-8")
+            quest = {}
+            for node in self.nodes:
+                quest[node.tag] = {"position": [node.position.x(), node.position.y()], "bot_answer" : node.answer, #self.quest[node.tag]["bot_answer"],
+                               "goto": {}}
+                for i in node.out_nodes:
+                    quest[node.tag]["goto"][i] = node.out_nodes[i]
+            print(quest)
+            f.write(str(quest).replace("'",'"'))
             
     
 if __name__ == '__main__':
