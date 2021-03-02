@@ -1,7 +1,7 @@
-{"start": {"position":[0,0],   "bot_answer":"Hello", "goto":{"hi":"begin"}},
+{"start": {"position":[0,100],   "bot_answer":"Hello", "goto":{"hi":"begin"}},
  "begin": {"position":[200,100], "bot_answer":"Are you Ready?", "goto":{"yes":"yay","no":"nope"}},
- "yay":   {"position":[600,200], "bot_answer":"Yay!", "goto":{}},
- "nope":  {"position":[400,400], "bot_answer":"Nope!", "goto":{"yay":"yay", "no":""}},
+ "yay":   {"position":[600,100], "bot_answer":"Yay!", "goto":{}},
+ "nope":  {"position":[400,200], "bot_answer":"Nope!", "goto":{"yay":"yay", "no":""}},
  "unidentified":"I don't understand you ):",
  "help":"Press /start"
 }
