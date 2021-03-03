@@ -2,7 +2,7 @@
 
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QPen, QBrush, QPolygon, QPainterPath
+from PyQt5.QtGui import *
 
 import json
 import math
@@ -17,7 +17,7 @@ class Node():
         self.out_nodes = out_nodes
         self.width = 150
         self.header = 25
-        self.height = 25 * (len(out_nodes) + 1)
+        self.height = 25 * (len(out_nodes) + 2)
 
         self.moveTo(position)
 
@@ -25,6 +25,8 @@ class Node():
     def moveTo(self, position):
         self.position = position
         self.head = QRect(position, QSize(self.width - self.header, self.header))
+        
+        self.answer_rect = QRect(position.x(), position.y() + self.header, self.width, self.header)
 
         circleD = self.header - 10
         
@@ -34,7 +36,7 @@ class Node():
         self.output_sockets = []
 
         for out in self.out_nodes:
-            strY = position.y() + (len(self.output_sockets) + 2) * self.header
+            strY = position.y() + (len(self.output_sockets) + 3) * self.header
             circle = QRect(position.x() + self.width - circleD / 2, strY + 5, circleD, circleD)
 
             self.output_sockets.append({"rect": circle,
@@ -229,15 +231,17 @@ class Widget(QWidget):
             painter.drawRect(node.head)
 
             # Header text
-            header_text = QRect(head.x() + 15, head.y(), node.width, node.header)
+            header_text_rect = QRect(head.x() + 15, head.y(), node.width, node.header)
             painter.setFont(QFont("Calibri", 14, QFont.Bold))
-            painter.drawText(header_text, Qt.AlignLeft, node.tag)
+            header_text = self.short_text(node.tag, painter.font(), node.width - node.header)
+            painter.drawText(header_text_rect, Qt.AlignLeft, header_text)
 
             # Header cirle (Node Input)
-            color = Qt.green if node.input_socket["selected"] and self.isDragging else Qt.cyan
-            painter.setBrush(QBrush(color, Qt.SolidPattern))
             circleD = node.header - 10
-            painter.drawEllipse(node.input_socket["rect"])
+            if node.tag != "start":
+                color = Qt.green if node.input_socket["selected"] and self.isDragging else Qt.cyan
+                painter.setBrush(QBrush(color, Qt.SolidPattern))                
+                painter.drawEllipse(node.input_socket["rect"])
             
             # Node options
             color = Qt.green if node.opt["selected"] else Qt.cyan
@@ -247,13 +251,18 @@ class Widget(QWidget):
             # Main part
             painter.setBrush(QBrush(QColor(200, 200, 200, 255), Qt.SolidPattern))
             painter.drawRect(head.x(), head.y() + node.header, node.width, node.height)
+            
+            # Bot answer
+            painter.setFont(QFont("Calibri", 14, QFont.Normal))
+            answer_text = self.short_text("  " + node.answer, painter.font(), node.width)
+            painter.drawText(node.answer_rect, Qt.AlignLeft, answer_text)
 
             # Node outputs
             yNodeOut = 0
             for nodeOut in node.out_nodes:
 
                 # Output text
-                strY = head.y() + (node.header * 2) + yNodeOut * 25
+                strY = head.y() + (node.header * 3) + yNodeOut * 25
                 out_rect = QRect(head.x(), strY, node.width - circleD, 25)
                 painter.setFont(QFont("Calibri", 14, QFont.Normal))
                 painter.drawText(out_rect, Qt.AlignRight, nodeOut)
@@ -293,6 +302,13 @@ class Widget(QWidget):
                 painter.drawEllipse(socket["rect"])
 
                 yNodeOut += 1
+    
+    def short_text(self, text, font, lenght):
+        width = QFontMetrics(font).horizontalAdvance(text) 
+        dl = math.ceil(width / len(text))
+        out = text[:(lenght // dl - 2)] + ("..." if width > lenght else "")
+        return out
+    
 
     def curve(self, start, end):
         delta = end - start
@@ -423,13 +439,24 @@ class Node_Editor(QDialog):
         self.tag_name.setText(node.tag)
         self.tag_name.textChanged[str].connect(self.change_tag)
         
+        self.answer_ = QLabel("Answer:", self)
+        self.answer = QLineEdit(self)
+        self.answer.setText(node.answer)
+        self.answer.textChanged[str].connect(self.change_answer)   
+        
+        
         lay = QVBoxLayout(self)
         
         hlay1 = QHBoxLayout()
         hlay1.addWidget(self.tag_name_)
         hlay1.addWidget(self.tag_name) 
         
+        hlay2 = QHBoxLayout()
+        hlay2.addWidget(self.answer_)
+        hlay2.addWidget(self.answer)         
+        
         lay.addLayout(hlay1) 
+        lay.addLayout(hlay2) 
         
     def change_tag(self, text):
         if text != "":
@@ -444,6 +471,11 @@ class Node_Editor(QDialog):
                 number += 1
                         
             self.parent.nodes[ind].tag = text
+            
+    def change_answer(self, text):
+        if text != "":
+            ind = [n.answer for n in self.parent.nodes].index(self.node.answer)
+            self.parent.nodes[ind].answer = text   
                         
             
         
