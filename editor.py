@@ -17,12 +17,13 @@ class Node():
         self.out_nodes = out_nodes
         self.width = 150
         self.header = 25
-        self.height = 25 * (len(out_nodes) + 2)
+        
 
         self.moveTo(position)
 
     # Move node to position
     def moveTo(self, position):
+        self.height = 25 * (len(self.out_nodes) + 2)
         self.position = position
         self.head = QRect(position, QSize(self.width - self.header, self.header))
         
@@ -44,6 +45,9 @@ class Node():
                                         "goto": out,
                                         "selected": False,
                                         "connected": False})
+            
+    def update(self):
+        self.moveTo(self.position)
 
 
 class Widget(QWidget):
@@ -158,7 +162,7 @@ class Widget(QWidget):
                 connected = False
                 for node in self.nodes:
                     ind = [n.tag for n in self.nodes].index(node.tag)
-                    if node.input_socket["rect"].contains(pos):
+                    if node.input_socket["rect"].contains(pos) and self.nodes[ind].tag != "start":
                         self.nodes[ind].input_socket["selected"] = True
                         self.ghostLine["socket"] = node.tag
                         connected = True
@@ -200,6 +204,7 @@ class Widget(QWidget):
                     socket = self.nodes[self.socketSelected[0]].output_sockets[self.socketSelected[1]]
                     if self.ghostLine["socket"] != None:
                         self.nodes[self.socketSelected[0]].out_nodes[socket["goto"]] = self.ghostLine["socket"]
+                        self.nodes[[n.tag for n in self.nodes].index(self.ghostLine["socket"])].input_socket["selected"] = False
                     self.ghostLine["line"] = None
                     self.ghostLine["socket"] = None
                     self.update()
@@ -265,7 +270,8 @@ class Widget(QWidget):
                 strY = head.y() + (node.header * 3) + yNodeOut * 25
                 out_rect = QRect(head.x(), strY, node.width - circleD, 25)
                 painter.setFont(QFont("Calibri", 14, QFont.Normal))
-                painter.drawText(out_rect, Qt.AlignRight, nodeOut)
+                out_text = self.short_text("  " + nodeOut, painter.font(), node.width)
+                painter.drawText(out_rect, Qt.AlignRight, out_text)
 
                 # Start position
                 start = QPoint(head.x() + node.width, strY + circleD / 2 + 5)
@@ -427,36 +433,74 @@ class Node_Editor(QDialog):
         self.parent = parent
         self.node = node
         
+        self.string_height = 45
+        self.out_offset = 3
+        
         #-----------------Title---------------------------
         self.setWindowTitle("Node Edit")
         #self.setWindowIcon(QIcon('icon.png'))
-        self.setFixedSize(400, 300)
+        self.setFixedSize(300, (len(node.out_nodes) + self.out_offset) * self.string_height)
         
         self.setFont(QFont("Calibri", 14, QFont.Normal))  
         
         self.tag_name_ = QLabel("Tag:", self)
         self.tag_name = QLineEdit(self)
-        self.tag_name.setText(node.tag)
+        self.tag_name.setText(self.node.tag)
         self.tag_name.textChanged[str].connect(self.change_tag)
         
         self.answer_ = QLabel("Answer:", self)
         self.answer = QLineEdit(self)
-        self.answer.setText(node.answer)
+        self.answer.setText(self.node.answer)
         self.answer.textChanged[str].connect(self.change_answer)   
         
         
-        lay = QVBoxLayout(self)
+        self.lay = QVBoxLayout(self)
         
         hlay1 = QHBoxLayout()
         hlay1.addWidget(self.tag_name_)
+        hlay1.addStretch()
         hlay1.addWidget(self.tag_name) 
         
         hlay2 = QHBoxLayout()
         hlay2.addWidget(self.answer_)
+        hlay2.addStretch()
         hlay2.addWidget(self.answer)         
         
-        lay.addLayout(hlay1) 
-        lay.addLayout(hlay2) 
+        self.lay.addLayout(hlay1) 
+        self.lay.addLayout(hlay2) 
+        self.lay.addWidget(QLabel("User ask:", self))
+        
+        self.out_line = []
+        number = 0
+        for out in self.node.out_nodes:
+            self.add_out(number, out)           
+            number += 1
+            
+        self.new_out = QPushButton("Add ask", self)
+        self.new_out.clicked.connect(self.create_out)
+        
+        hlay3 = QHBoxLayout()
+        hlay3.addStretch(2)  
+        hlay3.addWidget(self.new_out)      
+        self.lay.addLayout(hlay3) 
+    
+    def add_out(self, number, out): 
+        self.out_line.append({#"name" : QLabel("User ask: ", self),
+                              "edit" : QLineEdit(self),
+                              "last_value" : out,
+                              "delete" : QPushButton("-", self)})
+        
+        self.out_line[number]["edit"].setText(out)
+        self.out_line[number]["edit"].textChanged[str].connect(self.change_out) 
+        
+        self.out_line[number]["delete"].clicked.connect(self.delete_out)
+            
+        hlay = QHBoxLayout()
+        #hlay.addWidget(self.out_line[number]["name"])
+        #hlay.addStretch()
+        hlay.addWidget(self.out_line[number]["edit"])  
+        hlay.addWidget(self.out_line[number]["delete"])  
+        self.lay.addLayout(hlay)         
         
     def change_tag(self, text):
         if text != "":
@@ -476,10 +520,62 @@ class Node_Editor(QDialog):
         if text != "":
             ind = [n.answer for n in self.parent.nodes].index(self.node.answer)
             self.parent.nodes[ind].answer = text   
-                        
             
-        
+    def change_out(self, text):
+        sender = self.sender()        
+        ind = [i["edit"] for i in self.out_line].index(sender)
+        input_node = self.node.out_nodes[self.out_line[ind]["last_value"]]
+        temp = {}
+        for i in self.node.out_nodes:
+            if i == input_node:
+                temp[text] = input_node
+            else:
+                temp[i] = self.node.out_nodes[i]
+        self.node.out_nodes = temp
+        self.out_line[ind]["last_value"] = text
+                        
 
+    def delete_out(self):
+        sender = self.sender()        
+        ind = [i["delete"] for i in self.out_line].index(sender)
+        self.node.out_nodes.pop(self.out_line[ind]["last_value"])
+        self.node.update()
+        
+        for i in self.out_line[ind]:
+            if i != "last_value":
+                self.out_line[ind][i].deleteLater()
+        self.out_line.pop(ind)
+        self.lay.removeItem(self.lay.takeAt(ind + self.out_offset))
+        
+        self.setFixedSize(300, (len(self.node.out_nodes) + self.out_offset) * self.string_height)
+        
+        self.update()
+        
+    def create_out(self):
+        sender = self.sender()        
+        sender.deleteLater()
+        self.lay.removeItem(self.lay.takeAt(len(self.out_line) + self.out_offset))
+        
+        name = "ask"
+        num = 0
+        for out in self.node.out_nodes:
+            if out[:len(name)] == name:
+                num = int(out[len(name):]) + 1
+                
+        self.node.out_nodes[name + str(num)] = ""
+        self.node.update()
+        self.add_out(len(self.out_line), name + str(num))
+        
+        self.new_out = QPushButton("Add ask", self)
+        self.new_out.clicked.connect(self.create_out)
+        
+        hlay3 = QHBoxLayout()
+        hlay3.addStretch(2)  
+        hlay3.addWidget(self.new_out)      
+        self.lay.addLayout(hlay3)   
+        
+        self.setFixedSize(300, (len(self.node.out_nodes) + self.out_offset) * self.string_height)
+        
 
 if __name__ == '__main__':
     import sys
