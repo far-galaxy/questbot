@@ -51,6 +51,9 @@ class Node():
                                         "goto": out,
                                         "selected": False,
                                         "connected": False})
+    def moveDP(self, dp):
+        self.position += dp
+        self.update()
             
     def update(self):
         self.moveTo(self.position)
@@ -98,15 +101,23 @@ class Widget(QWidget):
 
         self.setMouseTracking(True)
         
+        self.camera = QPoint(20, 0)
+        
         #   Triggers
         self.nodeSelected = None
         self.isDragging = False
         self.socketSelected = None
         self.optSelected = None
         self.ghostLine = {"socket": None, "line": None}
+        self.isCameraMoving = False
+        self.mouse = QPoint(0,0)
 
     def mouseMoveEvent(self, event):
-        pos = event.pos()
+        pos = event.pos() - self.camera
+        #self.mouse = event.pos()
+        
+        if self.isCameraMoving:
+            self.camera = event.pos() - self.mouse
 
         if not self.isDragging:
             isInHead = False
@@ -213,6 +224,18 @@ class Widget(QWidget):
                     self.ghostLine["line"] = None
                     self.ghostLine["socket"] = None
                     self.update()
+                    
+        elif event.button() == Qt.MiddleButton:
+            if not self.isCameraMoving:
+                self.mouse = event.pos() - self.camera
+                print(self.mouse.x(), self.mouse.y())
+                self.isCameraMoving = True            
+            
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MiddleButton:
+            self.isCameraMoving = False
+            
+                    
 
     def keyPressEvent(self, e):
 
@@ -234,7 +257,8 @@ class Widget(QWidget):
         painter.setPen(QPen(Qt.black, 1, Qt.SolidLine))
 
         for node in self.nodes:
-            head = node.position
+            self.nodes[self.nodes.index(node)].moveDP(self.camera)
+            head = QPoint(node.position)
 
             # Header
             painter.setBrush(QBrush(Qt.white, Qt.SolidPattern))
@@ -287,7 +311,7 @@ class Widget(QWidget):
                 if node.out_nodes[nodeOut] != "":
                     # End position
                     endInd = [n.tag for n in self.nodes].index(node.out_nodes[nodeOut])
-                    end = QPoint(self.nodes[endInd].position)
+                    end = QPoint(self.nodes[endInd].position) + self.camera
                     end += QPoint(-circleD / 2, circleD / 2 + 5)
 
                     painter.save()
@@ -313,6 +337,8 @@ class Widget(QWidget):
                 painter.drawEllipse(socket["rect"])
 
                 yNodeOut += 1
+                
+            self.nodes[self.nodes.index(node)].moveDP(-self.camera)
     
     def short_text(self, text, font, lenght):
         width = QFontMetrics(font).horizontalAdvance(text) 
@@ -463,8 +489,7 @@ class Node_Editor(QDialog):
         self.answer = QLineEdit(self)
         self.answer.setText(self.node.answer)
         self.answer.textChanged[str].connect(self.change_answer)   
-        
-        
+                
         self.lay = QVBoxLayout(self)
         
         hlay1 = QHBoxLayout()
@@ -518,7 +543,7 @@ class Node_Editor(QDialog):
         self.lay.addLayout(hlay)         
         
     def change_tag(self, text):
-        if text != "":
+        if text != "" and not text in [n.tag for n in self.parent.nodes]:
             ind = [n.tag for n in self.parent.nodes].index(self.node.tag)
             old_tag = self.parent.nodes[ind].tag
             
@@ -537,17 +562,18 @@ class Node_Editor(QDialog):
             self.parent.nodes[ind].answer = text   
             
     def change_out(self, text):
-        sender = self.sender()        
-        ind = [i["edit"] for i in self.out_line].index(sender)
-        input_node = self.node.out_nodes[self.out_line[ind]["last_value"]]
-        temp = {}
-        for i in self.node.out_nodes:
-            if i == self.out_line[ind]["last_value"]:
-                temp[text] = input_node
-            else:
-                temp[i] = self.node.out_nodes[i]
-        self.node.out_nodes = temp
-        self.out_line[ind]["last_value"] = text
+        if not text in self.node.out_nodes:
+            sender = self.sender()        
+            ind = [i["edit"] for i in self.out_line].index(sender)
+            input_node = self.node.out_nodes[self.out_line[ind]["last_value"]]
+            temp = {}
+            for i in self.node.out_nodes:
+                if i == self.out_line[ind]["last_value"]:
+                    temp[text] = input_node
+                else:
+                    temp[i] = self.node.out_nodes[i]
+            self.node.out_nodes = temp
+            self.out_line[ind]["last_value"] = text
                         
 
     def delete_out(self):
@@ -571,12 +597,6 @@ class Node_Editor(QDialog):
         sender.deleteLater()
         self.lay.removeItem(self.lay.takeAt(len(self.out_line) + self.out_offset))
         
-        #name = "ask"
-        #num = 0
-        #for out in self.node.out_nodes:
-            #if out[:len(name)] == name:
-                #num = int(out[len(name):]) + 1
-                
         name = check_duplicate("ask", self.node.out_nodes)
                 
         self.node.out_nodes[name] = ""
