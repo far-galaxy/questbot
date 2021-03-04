@@ -101,7 +101,7 @@ class Widget(QWidget):
 
         self.setMouseTracking(True)
         
-        self.camera = QPoint(20, 0)
+        self.camera = QPoint(0, 0)
         
         #   Triggers
         self.nodeSelected = None
@@ -118,6 +118,7 @@ class Widget(QWidget):
         
         if self.isCameraMoving:
             self.camera = event.pos() - self.mouse
+            self.setCursor(Qt.ClosedHandCursor)
 
         if not self.isDragging:
             isInHead = False
@@ -151,29 +152,31 @@ class Widget(QWidget):
                         self.update()
                     socket_number += 1
                 number += 1
-                
+            
+            #TODO: fix cursor bug    
             if isInHead:
                 self.setCursor(Qt.SizeAllCursor)
             elif isInOutputSocket or isInOpt:
                 self.setCursor(Qt.PointingHandCursor)
             else:
-                self.setCursor(Qt.ArrowCursor)
+                if not self.isCameraMoving:
+                    self.setCursor(Qt.ArrowCursor)
                 self.nodeSelected = None
                 self.socketSelected = None
                 self.optSelected = None
 
         #   Dragging objects
-        else:
+        elif not self.isCameraMoving:
             #    Node
             if self.nodeSelected != None:
-                self.nodes[self.nodeSelected].moveTo(pos - self.dPos)
+                self.nodes[self.nodeSelected].moveTo(pos - self.dPos + self.camera)
                 self.update()
                 
             #    Output socket     
             elif self.socketSelected != None:
                 socket = self.nodes[self.socketSelected[0]].output_sockets[self.socketSelected[1]]
                 self.nodes[self.socketSelected[0]].out_nodes[socket["goto"]] = ""
-                self.ghostLine["line"] = self.curve(socket["pos"], pos)
+                self.ghostLine["line"] = self.curve(socket["pos"] + self.camera, pos + self.camera)
                 self.update()
 
                 connected = False
@@ -226,9 +229,8 @@ class Widget(QWidget):
                     self.update()
                     
         elif event.button() == Qt.MiddleButton:
-            if not self.isCameraMoving:
+            if not self.isCameraMoving and not self.isDragging:
                 self.mouse = event.pos() - self.camera
-                print(self.mouse.x(), self.mouse.y())
                 self.isCameraMoving = True            
             
     def mouseReleaseEvent(self, event):
@@ -247,13 +249,25 @@ class Widget(QWidget):
             self.save_quest()
             self.update()
             
-        if e.key() == Qt.Key_Q and self.nodeSelected != None:
-            self.node_edit_window(self.nodes[self.nodeSelected])
+        if e.key() == Qt.Key_Home:
+            self.camera = QPoint(0, 0)
+            self.update()
       
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setFont(QFont("Calibri", 14, QFont.Bold))
+        
+        # Grid
+        painter.setPen(QPen(Qt.darkGray, 1, Qt.SolidLine))
+        for x in range(self.size().width() // 100):
+            dx = x * 100 + (self.camera.x()%100)
+            painter.drawLine(dx, 0, dx, self.size().height())
+            
+        for y in range(self.size().height() // 100):
+            dy = y * 100 + (self.camera.y()%100)
+            painter.drawLine(0, dy, self.size().width(), dy)
+        
         painter.setPen(QPen(Qt.black, 1, Qt.SolidLine))
 
         for node in self.nodes:
@@ -330,7 +344,8 @@ class Widget(QWidget):
 
                     circleColor = Qt.cyan
 
-                # Draw cirlce of output socket.
+                # Draw cirlce of output socket.\
+                # TODO: fix coloring while selecting
                 socket = node.output_sockets[yNodeOut]
                 circleColor = Qt.green if socket["selected"] else circleColor
                 painter.setBrush(QBrush(circleColor, Qt.SolidPattern))
@@ -421,11 +436,11 @@ class Widget(QWidget):
 
     def new_node(self):
         name = check_duplicate("node", [n.tag for n in self.nodes])
-        self.nodes.append(Node(QPoint(100, 100), name, "", {}))
+        self.nodes.append(Node(self.camera + self.mouse, name, "", {}))
         self.update()
         
         self.nodeSelected = len(self.nodes) - 1
-        self.dPos = QPoint(0, 0)
+        self.dPos = self.camera
         self.isDragging = True
         self.setCursor(Qt.SizeAllCursor)
 
