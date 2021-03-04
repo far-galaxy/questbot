@@ -8,6 +8,12 @@ import json
 import math
 import os
 
+def check_duplicate(name, lst):
+    num = 0
+    for obj in lst:
+        if obj[:len(name)] == name:
+            num = int(obj[len(name):]) + 1   
+    return name + str(num)
 
 class Node():
     def __init__(self, position, tag, answer, out_nodes):
@@ -186,8 +192,7 @@ class Widget(QWidget):
                 #   Node
                 if self.nodeSelected != None:
                     self.isDragging = True
-                    d = event.pos() - self.nodes[self.nodeSelected].position
-                    self.dPos = d
+                    self.dPos = event.pos() - self.nodes[self.nodeSelected].position
                     
                 
                 #   Output socket
@@ -389,8 +394,14 @@ class Widget(QWidget):
         node_window.show()    
 
     def new_node(self):
-        self.nodes.append(Node(QPoint(100, 100), "node", "", {}))
+        name = check_duplicate("node", [n.tag for n in self.nodes])
+        self.nodes.append(Node(QPoint(100, 100), name, "", {}))
         self.update()
+        
+        self.nodeSelected = len(self.nodes) - 1
+        self.dPos = QPoint(0, 0)
+        self.isDragging = True
+        self.setCursor(Qt.SizeAllCursor)
 
     def open_file(self):
         file = QFileDialog.getOpenFileName(self, 'Open Quest File', os.path.abspath(""), "Quest (*.json)")
@@ -434,7 +445,7 @@ class Node_Editor(QDialog):
         self.node = node
         
         self.string_height = 45
-        self.out_offset = 3
+        self.out_offset = 4
         
         #-----------------Title---------------------------
         self.setWindowTitle("Node Edit")
@@ -464,8 +475,12 @@ class Node_Editor(QDialog):
         hlay2 = QHBoxLayout()
         hlay2.addWidget(self.answer_)
         hlay2.addStretch()
-        hlay2.addWidget(self.answer)         
+        hlay2.addWidget(self.answer)  
         
+        self.del_node = QPushButton("Delete Node", self)
+        self.del_node.clicked.connect(self.delete_node)
+        
+        self.lay.addWidget(self.del_node)
         self.lay.addLayout(hlay1) 
         self.lay.addLayout(hlay2) 
         self.lay.addWidget(QLabel("User ask:", self))
@@ -527,7 +542,7 @@ class Node_Editor(QDialog):
         input_node = self.node.out_nodes[self.out_line[ind]["last_value"]]
         temp = {}
         for i in self.node.out_nodes:
-            if i == input_node:
+            if i == self.out_line[ind]["last_value"]:
                 temp[text] = input_node
             else:
                 temp[i] = self.node.out_nodes[i]
@@ -556,15 +571,17 @@ class Node_Editor(QDialog):
         sender.deleteLater()
         self.lay.removeItem(self.lay.takeAt(len(self.out_line) + self.out_offset))
         
-        name = "ask"
-        num = 0
-        for out in self.node.out_nodes:
-            if out[:len(name)] == name:
-                num = int(out[len(name):]) + 1
+        #name = "ask"
+        #num = 0
+        #for out in self.node.out_nodes:
+            #if out[:len(name)] == name:
+                #num = int(out[len(name):]) + 1
                 
-        self.node.out_nodes[name + str(num)] = ""
+        name = check_duplicate("ask", self.node.out_nodes)
+                
+        self.node.out_nodes[name] = ""
         self.node.update()
-        self.add_out(len(self.out_line), name + str(num))
+        self.add_out(len(self.out_line), name)
         
         self.new_out = QPushButton("Add ask", self)
         self.new_out.clicked.connect(self.create_out)
@@ -575,6 +592,24 @@ class Node_Editor(QDialog):
         self.lay.addLayout(hlay3)   
         
         self.setFixedSize(300, (len(self.node.out_nodes) + self.out_offset) * self.string_height)
+        
+    def delete_node(self):        
+        reply = QMessageBox.question(self, 'Warning', 
+                                     "Are you sure you want to delete the node? ", 
+                                     QMessageBox.Yes |
+                                     QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:        
+            number = 0
+            for node in self.parent.nodes:
+                for out in node.out_nodes:
+                    if self.parent.nodes[number].out_nodes[out] == self.node.tag:
+                        self.parent.nodes[number].out_nodes[out] = ""
+                number += 1 
+                
+            self.parent.nodes.pop(self.parent.nodes.index(self.node))
+            self.parent.update()
+            self.close()
         
 
 if __name__ == '__main__':
