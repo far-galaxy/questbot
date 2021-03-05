@@ -7,6 +7,8 @@ from PyQt5.QtGui import *
 import json
 import math
 import os
+from sys import argv
+
 
 def check_duplicate(name, lst):
     num = 0
@@ -96,8 +98,11 @@ class Widget(QWidget):
         grid = QGridLayout()
         grid.setMenuBar(menubar)
         self.setLayout(grid)
-
-        self.load_quest('quest.json')
+        
+        try:
+            self.load_quest(argv[1])
+        except IndexError:
+            self.nodes = []       
 
         self.setMouseTracking(True)
         
@@ -287,7 +292,7 @@ class Widget(QWidget):
             # Header cirle (Node Input)
             circleD = node.header - 10
             if node.tag != "start":
-                color = Qt.green if node.input_socket["selected"] and self.isDragging else Qt.cyan
+                color = Qt.green if node.input_socket["selected"] and not self.isDragging else Qt.cyan
                 painter.setBrush(QBrush(color, Qt.SolidPattern))                
                 painter.drawEllipse(node.input_socket["rect"])
             

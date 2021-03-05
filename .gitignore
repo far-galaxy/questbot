@@ -4,5 +4,11 @@ __pycache__/*
 stuff
 stuff/*
 
+build
+build/*
+
+dist
+dist/*
+
 token.txt
 admin.txt
