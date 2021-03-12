@@ -66,29 +66,52 @@ class Widget(QWidget):
         super(Widget, self).__init__(parent)
 
         # -----------------Title---------------------------
-        self.setWindowTitle('QuestBot Constructor')
+        self.title = 'QuestBot Constructor'
+        self.setWindowTitle(self.title)
         # self.setWindowIcon(QIcon('icon.png'))
         self.resize(800, 600)
         #self.setFont(QFont("Calibri", 16, QFont.Normal))
 
         self.w = self.frameGeometry().width()
         self.h = self.frameGeometry().height()
+        
+        self.load_lp("english.lp")
 
         menubar = QMenuBar()
 
         #  File menu
-        file_menu = menubar.addMenu('&File')
+        file_menu = menubar.addMenu('&' + self.lp["file"])
+        
+        new_file_menu = QAction(self.lp["new"], self)
+        new_file_menu.setShortcut('Ctrl+N')
+        new_file_menu.triggered.connect(self.new_file)        
 
-        open_file_menu = QAction('Open', self)
+        open_file_menu = QAction(self.lp["open"], self)
         open_file_menu.setShortcut('Ctrl+O')
         open_file_menu.triggered.connect(self.open_file)
 
-        save_file_menu = QAction('Save', self)
-        save_file_menu.setShortcut('Ctrl+S')
-        save_file_menu.triggered.connect(self.save_file)
+        self.save_file_menu = QAction(self.lp["save"], self)
+        self.save_file_menu.setShortcut('Ctrl+S')
+        self.save_file_menu.triggered.connect(self.update_file)
+        self.save_file_menu.setEnabled(False)
+        
+        save_as_menu = QAction(self.lp["save_as"], self)
+        save_as_menu.triggered.connect(self.save_file)        
+        
+        self.recent_menu = QMenu(self.lp['recent'], self)
+            #for i in recent_files:        
+        
+        self.exitAction = QAction('&'+self.lp['quit'], self)
+        self.exitAction.setShortcut('Ctrl+Q')
+        self.exitAction.triggered.connect(self.quit)           
 
+        file_menu.addAction(new_file_menu)
         file_menu.addAction(open_file_menu)
-        file_menu.addAction(save_file_menu)
+        file_menu.addAction(self.save_file_menu)
+        file_menu.addAction(save_as_menu)
+        file_menu.addMenu(self.recent_menu)
+        file_menu.addSeparator()
+        file_menu.addAction(self.exitAction)
 
         #   New Node action
         new_node_menu = menubar.addAction('&New Node')
@@ -101,8 +124,10 @@ class Widget(QWidget):
         
         try:
             self.load_quest(argv[1])
+            self.file = argv[1]
+            self.setWindowTitle(argv[1] + ': ' + self.title)
         except IndexError:
-            self.nodes = []       
+            self.new_file(True)
 
         self.setMouseTracking(True)
         
@@ -194,6 +219,10 @@ class Widget(QWidget):
                         self.ghostLine["socket"] = None
 
     def mousePressEvent(self, event):
+        if self.file != "" and self.check_changes():
+            self.setWindowTitle(self.file + '*: ' + self.title) 
+            self.save_file_menu.setEnabled(True)
+            
         if event.button() == Qt.LeftButton:
             #   Node options
             if  self.optSelected != None:
@@ -442,40 +471,101 @@ class Widget(QWidget):
         self.dPos = self.camera
         self.isDragging = True
         self.setCursor(Qt.SizeAllCursor)
+        
+    def new_file(self, startup = False):
+        if startup or self.unsaved_message():  
+            self.nodes = []  
+            self.file = ""
+            self.unidentified = ""
+            self.quest = {"unidentified" : ""}
+            self.save_file_menu.setEnabled(True)
+            self.setWindowTitle(self.title)
+            self.update()
 
     def open_file(self):
-        file = QFileDialog.getOpenFileName(self, 'Open Quest File', os.path.abspath(""), "Quest (*.json)")
-        self.load_quest(file[0])
+        if self.unsaved_message():    
+            file = QFileDialog.getOpenFileName(self, self.lp["open_dialog"], os.path.abspath(""), "Quest (*.qbc)")
+            self.load_quest(file[0])            
 
     def save_file(self):
-        file = QFileDialog.getSaveFileName(self, 'Save Quest File', os.path.abspath("quest.json"), "Quest (*.json)")
+        file = QFileDialog.getSaveFileName(self, self.lp["save_dialog"], os.path.abspath("quest.qbc"), "Quest (*.qbc)")
         self.save_quest(file[0])
+        
+    def update_file(self):
+        if self.file != "":
+            self.save_quest(self.file)
+            self.setWindowTitle(self.file + ': ' + self.title) 
+            self.save_file_menu.setEnabled(False)
+        else:
+            self.save_file()
+        
+    def load_lp(self, file):
+        pth = os.path.abspath('data/' + file)
+        f = open(pth, 'r', encoding="utf-8")
+        self.lp = json.loads(f.read())
+        f.close()
 
     def load_quest(self, file):
         if file != "":
             f = open(file, 'r', encoding="utf-8")
             self.quest = json.loads(f.read())
             f.close()
+            
+            self.file = file
+            self.setWindowTitle(file + ': QuestBot Constructor')            
 
             self.nodes = []
+            
+            self.unidentified = self.quest["unidentified"]
 
             # Make nodes objects
             for node in self.quest:
-                if node != "unidentified" and node != "help":
+                if node != "unidentified":
                     position = self.quest[node]["position"]
                     self.nodes.append(Node(QPoint(position[0], position[1]), node, self.quest[node]["bot_answer"], self.quest[node]["goto"]))
 
+    def quest2json(self):
+        quest = {}
+        for node in self.nodes:
+            quest[node.tag] = {"position": [node.position.x(), node.position.y()], "bot_answer": node.answer,  # self.quest[node.tag]["bot_answer"],
+                               "goto": {}}
+            for i in node.out_nodes:
+                quest[node.tag]["goto"][i] = node.out_nodes[i]  
+        quest["unidentified"] = self.unidentified
+        return quest
+     
+    def check_changes(self):
+        new = self.quest2json()
+        return self.quest != new
+        
+    def unsaved_message(self):
+        if self.check_changes():
+            reply = QMessageBox.question(self, self.lp["warning"], 
+                                         self.lp["unsaved"], 
+                                         QMessageBox.Yes |
+                                         QMessageBox.No | QMessageBox.Cancel, QMessageBox.Yes)
+            
+            if reply == QMessageBox.Yes:  
+                if self.file == "":
+                    self.save_file()
+                else:
+                    self.update_file()
+                return False
+                    
+            elif reply == QMessageBox.No:        
+                return True
+                
+        else:     
+            return True
     def save_quest(self, file):
         if file != "":
             f = open(file, 'w', encoding="utf-8")
-            quest = {}
-            for node in self.nodes:
-                quest[node.tag] = {"position": [node.position.x(), node.position.y()], "bot_answer": node.answer,  # self.quest[node.tag]["bot_answer"],
-                                   "goto": {}}
-                for i in node.out_nodes:
-                    quest[node.tag]["goto"][i] = node.out_nodes[i]
-            print(quest)
+            quest = self.quest2json()
             f.write(str(quest).replace("'", '"'))
+            
+    def quit(self):
+        if self.unsaved_message():
+            qApp.quit()
 
             
 class Node_Editor(QDialog):

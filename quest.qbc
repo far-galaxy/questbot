@@ -2,6 +2,5 @@
  "begin": {"position":[200,100], "bot_answer":"Are you Ready?", "goto":{"yes":"yay","no":"nope"}},
  "yay":   {"position":[600,100], "bot_answer":"Yay!", "goto":{}},
  "nope":  {"position":[400,200], "bot_answer":"Nope!", "goto":{"yay":"yay", "no":""}},
- "unidentified":"I don't understand you ):",
- "help":"Press /start"
+ "unidentified":"I don't understand you ):"
 }

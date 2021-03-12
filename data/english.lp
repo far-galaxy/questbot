@@ -1,0 +1,13 @@
+{"name" : "English",
+ "icon" : "english.ico",
+ "file" : "File",
+ "new" : "New",
+ "open" : "Open",
+ "open_dialog" : "Open Quest File",
+ "save" : "Save",
+ "save_dialog" : "Save Quest File",
+ "save_as" : "Save As",
+ "warning" : "Warning!",
+ "unsaved" : "You have unsaved changes.\nDo you want to save them?",
+ "recent" : "Recent files",
+ "quit" : "Quit"}
