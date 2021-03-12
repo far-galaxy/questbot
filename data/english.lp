@@ -10,4 +10,8 @@
  "warning" : "Warning!",
  "unsaved" : "You have unsaved changes.\nDo you want to save them?",
  "recent" : "Recent files",
- "quit" : "Quit"}
+ "quit" : "Quit",
+ "options" : "Options",
+ "language" : "Language",
+ "lang_changed" : "Restart the program to apply the setting"
+ }

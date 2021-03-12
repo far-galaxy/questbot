@@ -8,6 +8,7 @@ import json
 import math
 import os
 from sys import argv
+from glob import glob
 
 
 def check_duplicate(name, lst):
@@ -75,7 +76,8 @@ class Widget(QWidget):
         self.w = self.frameGeometry().width()
         self.h = self.frameGeometry().height()
         
-        self.load_lp("english.lp")
+        self.load_options()
+        self.load_lp(self.lang)
 
         menubar = QMenuBar()
 
@@ -112,6 +114,10 @@ class Widget(QWidget):
         file_menu.addMenu(self.recent_menu)
         file_menu.addSeparator()
         file_menu.addAction(self.exitAction)
+        
+        opt_menu = menubar.addAction('&'+self.lp['options'])
+        opt_menu.triggered.connect(self.options_window) 
+        opt_menu.setShortcut('F2')        
 
         #   New Node action
         new_node_menu = menubar.addAction('&New Node')
@@ -557,15 +563,47 @@ class Widget(QWidget):
                 
         else:     
             return True
+        
     def save_quest(self, file):
         if file != "":
             f = open(file, 'w', encoding="utf-8")
             quest = self.quest2json()
             f.write(str(quest).replace("'", '"'))
             
+    def load_options(self):
+        try:
+            f = open("data/options.json", 'r', encoding="utf-8")
+        except FileNotFoundError:
+            f = open("data/options.json", 'w', encoding="utf-8")
+            f.write('{"lang" : "english.lp"}')
+            f.close()  
+            f = open("data/options.json", 'r', encoding="utf-8")
+            
+        self.lang = json.loads(f.read())["lang"]
+        f.close() 
+        
+    def set_option(self, param, value):
+        f = open("data/options.json", 'r', encoding="utf-8")
+        opts = json.loads(f.read())
+        f.close()   
+        opts[param] = value
+        f = open("data/options.json", 'w', encoding="utf-8")
+        f.write(str(opts).replace("'", '"'))
+        f.close()          
+            
+    def options_window(self):
+        opt_window = Options(self)
+        opt_window.show()    
+            
     def quit(self):
         if self.unsaved_message():
             qApp.quit()
+            
+    def closeEvent(self, event):
+        if self.unsaved_message():
+            event.accept()
+        else:
+            event.ignore()            
 
             
 class Node_Editor(QDialog):
@@ -734,7 +772,51 @@ class Node_Editor(QDialog):
             self.parent.nodes.pop(self.parent.nodes.index(self.node))
             self.parent.update()
             self.close()
+            
+class Options(QDialog):
+    def __init__(self, parent=None):
+        super(Options, self).__init__(parent)
+        self.parent = parent
+        self.lp = parent.lp
         
+        langs = glob(os.path.abspath("data/"+"*.lp"))
+        self.langs = langs
+        
+        #-----------------Title---------------------------
+        self.setWindowTitle(self.lp['options'])
+        #self.setWindowIcon(QIcon('icon.png'))
+        self.setFixedSize(400, 300)
+        
+        #-----------------Language-----------------------
+        self.lang_ = QLabel(self.lp['language'] + ":", self)
+        self.lang_box = QComboBox(self)
+        for i, file in enumerate(langs):
+            f = open(file, 'r', encoding="utf-8")
+            lp = json.loads(f.read())
+            self.lang_box.addItem(QIcon('data/' + lp["icon"]), lp["name"], i)
+            if parent.lang == file.split("\\")[-1]:
+                self.lang_box.setCurrentIndex(i)
+        self.lang_box.activated.connect(self.set_lang)
+        
+        lay = QVBoxLayout(self)
+        
+        hlay1 = QHBoxLayout()
+        hlay1.addWidget(self.lang_)
+        hlay1.addWidget(self.lang_box)      
+        
+        lay.addLayout(hlay1)
+
+    def set_lang(self, number):
+        for i, file in enumerate(self.langs):
+            if i == number:
+                self.parent.set_option("lang", file.split("\\")[-1])
+                f = open(file, 'r', encoding="utf-8")
+                lp = json.loads(f.read())                
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText(lp['lang_changed'])
+                msg.setWindowTitle(lp['warning'])    
+                msg.exec()                
 
 if __name__ == '__main__':
     import sys

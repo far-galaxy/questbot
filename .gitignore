@@ -10,6 +10,8 @@ build/*
 dist
 dist/*
 
+data/options.json
+
 token.txt
 admin.txt
 users.json
