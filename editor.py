@@ -129,10 +129,9 @@ class Widget(QWidget):
             isInHead = False
             isInOpt = False
             isInOutputSocket = False
-            number = 0
             
             #    Detecting mouse over objects
-            for node in self.nodes:
+            for number, node in enumerate(self.nodes):
                 
                 #    Header
                 if node.head.contains(pos):
@@ -145,8 +144,7 @@ class Widget(QWidget):
                     self.optSelected = number
                     
                 #    Output socket
-                socket_number = 0
-                for out in node.output_sockets:
+                for socket_number, out in enumerate(node.output_sockets):
                     if out["rect"].contains(pos):
                         isInOutputSocket |= True
                         self.socketSelected = [number, socket_number]
@@ -155,8 +153,6 @@ class Widget(QWidget):
                     else:
                         self.nodes[number].output_sockets[socket_number]["selected"] = False
                         self.update()
-                    socket_number += 1
-                number += 1
             
             #TODO: fix cursor bug    
             if isInHead:
@@ -233,13 +229,13 @@ class Widget(QWidget):
                     self.ghostLine["socket"] = None
                     self.update()
                     
-        elif event.button() == Qt.MiddleButton:
+        elif event.button() == Qt.RightButton:
             if not self.isCameraMoving and not self.isDragging:
                 self.mouse = event.pos() - self.camera
                 self.isCameraMoving = True            
             
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MiddleButton:
+        if event.button() == Qt.RightButton:
             self.isCameraMoving = False
             
                     
@@ -311,11 +307,10 @@ class Widget(QWidget):
             painter.drawText(node.answer_rect, Qt.AlignLeft, answer_text)
 
             # Node outputs
-            yNodeOut = 0
-            for nodeOut in node.out_nodes:
+            for node_num, nodeOut in enumerate(node.out_nodes):
 
                 # Output text
-                strY = head.y() + (node.header * 3) + yNodeOut * 25
+                strY = head.y() + (node.header * 3) + node_num * 25
                 out_rect = QRect(head.x(), strY, node.width - circleD, 25)
                 painter.setFont(QFont("Calibri", 14, QFont.Normal))
                 out_text = self.short_text("  " + nodeOut, painter.font(), node.width)
@@ -351,12 +346,11 @@ class Widget(QWidget):
 
                 # Draw cirlce of output socket.\
                 # TODO: fix coloring while selecting
-                socket = node.output_sockets[yNodeOut]
+                socket = node.output_sockets[node_num]
                 circleColor = Qt.green if socket["selected"] else circleColor
                 painter.setBrush(QBrush(circleColor, Qt.SolidPattern))
                 painter.drawEllipse(socket["rect"])
 
-                yNodeOut += 1
                 
             self.nodes[self.nodes.index(node)].moveDP(-self.camera)
     
@@ -525,6 +519,10 @@ class Node_Editor(QDialog):
         self.del_node = QPushButton("Delete Node", self)
         self.del_node.clicked.connect(self.delete_node)
         
+        if self.node.tag == "start":
+            self.tag_name.setEnabled(False)
+            self.del_node.setEnabled(False)
+        
         self.lay.addWidget(self.del_node)
         self.lay.addLayout(hlay1) 
         self.lay.addLayout(hlay2) 
@@ -567,12 +565,10 @@ class Node_Editor(QDialog):
             ind = [n.tag for n in self.parent.nodes].index(self.node.tag)
             old_tag = self.parent.nodes[ind].tag
             
-            number = 0
-            for node in self.parent.nodes:
+            for number, node in enumerate(self.parent.nodes):
                 for out in node.out_nodes:
                     if self.parent.nodes[number].out_nodes[out] == old_tag:
                         self.parent.nodes[number].out_nodes[out] = text
-                number += 1
                         
             self.parent.nodes[ind].tag = text
             
@@ -640,12 +636,10 @@ class Node_Editor(QDialog):
                                      QMessageBox.No, QMessageBox.No)
         
         if reply == QMessageBox.Yes:        
-            number = 0
-            for node in self.parent.nodes:
+            for number, node in enumerate(self.parent.nodes):
                 for out in node.out_nodes:
                     if self.parent.nodes[number].out_nodes[out] == self.node.tag:
                         self.parent.nodes[number].out_nodes[out] = ""
-                number += 1 
                 
             self.parent.nodes.pop(self.parent.nodes.index(self.node))
             self.parent.update()
