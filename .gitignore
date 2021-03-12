@@ -12,3 +12,4 @@ dist/*
 
 token.txt
 admin.txt
+users.json
