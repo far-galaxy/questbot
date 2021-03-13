@@ -27,6 +27,9 @@ class Node():
         self.width = 150
         self.header = 25
         
+        self.output_sockets = []
+        self.input_socket = {"selected" : False}
+        self.opt = {"selected" : False}
 
         self.moveTo(position)
 
@@ -40,20 +43,24 @@ class Node():
 
         circleD = self.header - 10
         
-        self.opt = {"rect": QRect(position.x() + self.width - self.header, position.y(), self.header, self.header), "selected": False}
+        self.opt["rect"] = QRect(position.x() + self.width - self.header, position.y(), self.header, self.header)
 
-        self.input_socket = {"rect": QRect(position.x() - circleD / 2, position.y() + 5, circleD, circleD), "selected": False}
-        self.output_sockets = []
+        self.input_socket["rect"] = QRect(position.x() - circleD / 2, position.y() + 5, circleD, circleD)
 
-        for out in self.out_nodes:
-            strY = position.y() + (len(self.output_sockets) + 3) * self.header
+        for ind, out in enumerate(self.out_nodes):
+            strY = position.y() + (ind + 3) * self.header
             circle = QRect(position.x() + self.width - circleD / 2, strY + 5, circleD, circleD)
-
-            self.output_sockets.append({"rect": circle,
-                                        "pos": QPoint(position.x() + self.width + circleD / 2, strY + self.header // 2),
-                                        "goto": out,
-                                        "selected": False,
-                                        "connected": False})
+            
+            if not out in [s["goto"] for s in self.output_sockets]:
+                self.output_sockets.append({"rect": circle,
+                                            "pos": QPoint(position.x() + self.width + circleD / 2, strY + self.header // 2),
+                                            "goto": out,
+                                            "selected": False,
+                                            "connected": False})
+            else:
+                self.output_sockets[ind]["rect"] = circle
+                self.output_sockets[ind]["pos"] = QPoint(position.x() + self.width + circleD / 2, strY + self.header // 2)
+                
     def moveDP(self, dp):
         self.position += dp
         self.update()
@@ -173,6 +180,10 @@ class Widget(QWidget):
                 if node.opt["rect"].contains(pos):
                     isInOpt |= True
                     self.optSelected = number
+                    self.nodes[number].opt["selected"] = True
+                    
+                else:
+                    self.nodes[number].opt["selected"] = False
                     
                 #    Output socket
                 for socket_number, out in enumerate(node.output_sockets):
@@ -212,8 +223,7 @@ class Widget(QWidget):
                 self.update()
 
                 connected = False
-                for node in self.nodes:
-                    ind = [n.tag for n in self.nodes].index(node.tag)
+                for ind, node in enumerate(self.nodes):
                     if node.input_socket["rect"].contains(pos) and self.nodes[ind].tag != "start":
                         self.nodes[ind].input_socket["selected"] = True
                         self.ghostLine["socket"] = node.tag
@@ -244,7 +254,6 @@ class Widget(QWidget):
                     self.isDragging = True
                     self.dPos = event.pos() - self.nodes[self.nodeSelected].position
                     
-                
                 #   Output socket
                 elif self.socketSelected != None:
                     self.isDragging = True
@@ -323,7 +332,7 @@ class Widget(QWidget):
             # Header cirle (Node Input)
             circleD = node.header - 10
             if node.tag != "start":
-                color = Qt.green if node.input_socket["selected"] and not self.isDragging else Qt.cyan
+                color = Qt.green if node.input_socket["selected"] else Qt.cyan
                 painter.setBrush(QBrush(color, Qt.SolidPattern))                
                 painter.drawEllipse(node.input_socket["rect"])
             
@@ -355,6 +364,10 @@ class Widget(QWidget):
                 start = QPoint(head.x() + node.width, strY + circleD / 2 + 5)
 
                 circleColor = Qt.red
+                
+                painter.save()
+                painter.setPen(QPen(Qt.black, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                painter.setBrush(QBrush(Qt.NoBrush))                
 
                 # Draw line if output is definited.
                 if node.out_nodes[nodeOut] != "":
@@ -363,26 +376,19 @@ class Widget(QWidget):
                     end = QPoint(self.nodes[endInd].position) + self.camera
                     end += QPoint(-circleD / 2, circleD / 2 + 5)
 
-                    painter.save()
-                    painter.setPen(QPen(Qt.black, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-                    painter.setBrush(QBrush(Qt.NoBrush))
-
                     path = self.curve(start, end)
 
                     painter.drawPath(path)
-
-                    if self.ghostLine["line"] != None:
-                        painter.drawPath(self.ghostLine["line"])
-
-                    painter.restore()
-                    painter.setPen(QPen(Qt.black, 1, Qt.SolidLine))
-
                     circleColor = Qt.cyan
+                    
+                if self.ghostLine["line"] != None:
+                    painter.drawPath(self.ghostLine["line"])                
 
-                # Draw cirlce of output socket.\
-                # TODO: fix coloring while selecting
+                # Draw cirlce of output socket.
+                painter.restore()
+                painter.setPen(QPen(Qt.black, 1, Qt.SolidLine))                
                 socket = node.output_sockets[node_num]
-                circleColor = Qt.green if socket["selected"] else circleColor
+                circleColor = Qt.green if node.output_sockets[node_num]["selected"] else circleColor
                 painter.setBrush(QBrush(circleColor, Qt.SolidPattern))
                 painter.drawEllipse(socket["rect"])
 
